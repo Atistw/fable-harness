@@ -10,6 +10,12 @@ This kit follows [Semantic Versioning](https://semver.org/) — `MAJOR.MINOR.PAT
 
 The current version is also kept in [VERSION](VERSION).
 
+## [1.0.1] — 2026-07-07
+
+### Fixed
+
+- **verify_gate**: `TEST_CMD_RE` now recognizes script self-test entrypoints — a `--test` flag on any command (e.g. `python3 zh_convert_safe.py --test`) counts as a test run, so the Stop gate no longer falsely blocks a turn that ran one. Look-alike flags (`--test-pypi`, `--testing`, `--tests`) stay blocked via a `(\s|$)` anchor. Adds test T11 (allow + block cases, fail-then-pass verified). Reported by [@Jia-Hong-Peng](https://github.com/Jia-Hong-Peng) in [#1](https://github.com/Miguok/fable-harness/pull/1).
+
 ## [1.0.0] — 2026-07-07
 
 First tagged release. The kit is feature-complete and globally deployed.
