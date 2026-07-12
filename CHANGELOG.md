@@ -36,5 +36,5 @@ First tagged release. The kit is feature-complete and globally deployed.
 - **Per-turn nudge** (`.claude/hooks/prompt_nudge.sh`) and **verification gate** (`.claude/hooks/verify_gate.py`) with native cross-scope de-duplication.
 - **Adversarial review** skill (`.claude/skills/adversarial-review/`) and the three opposition agents (`skeptic`, `red-team`, `simplifier`).
 - **Model routing** table (`CLAUDE.md`) and **harness detector** (`scripts/detect_harness.py`).
-- **Governance docs**: `diagnostics.md`, `model_dispatch_rules.md`, `cognitive_rubrics.md`, `future_session_letter.md`.
+- **Governance docs**: `model_dispatch_rules.md`, `cognitive_rubrics.md`.
 - **Docs**: `README.md` and translations (繁體中文 / 简体中文 / 日本語 / 한국어), `INSTALL.md`, MIT `LICENSE` (+ 繁體中文 translation).
