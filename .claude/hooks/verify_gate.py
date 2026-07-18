@@ -8,13 +8,17 @@ stop_hook_active=true（模型第二次結束）時放行，避免純討論 sess
 任何解析錯誤一律 fail-open（exit 0 無輸出）——gate 絕不可弄壞 session。
 
 介面：stdin 收 hook JSON（transcript_path / stop_hook_active），stdout 輸出 block JSON 或無輸出。
-測試：tests/test_verify_gate.py（十二案例，fail-then-pass 已驗證；T9 多生態識別、T10 假放行防護、
-T11 --test 自測入口、T12 cp950 stdout 回歸）。
+失效遙測：fail-open 吞例外前 append 一行（timestamp + repr）到同目錄 .gate_fail（gitignored；
+巢狀 try，遙測寫入失敗亦不得阻斷）——沒有屍檢紀錄的 fail-open 會靜默死亡數日無人察覺。
+解譯器層死亡（python 沒起來）本檔看不見：由 stop_gate.sh 在 gate 成功返回後寫
+.last_stopgate marker——解譯器死亡＝marker 停止更新（對照 .last_promptsubmit 判定）。
+測試：tests/test_verify_gate.py（十三案例，fail-then-pass 已驗證；T9 多生態識別、T10 假放行防護、
+T11 --test 自測入口、T12 cp950 stdout 回歸、T13 失效遙測）。
 """
 import json
 import re
 import sys
-from pathlib import PurePath
+from pathlib import Path, PurePath
 
 CODE_EXTS = {
     ".py", ".js", ".ts", ".tsx", ".jsx", ".mjs", ".cjs",
@@ -112,8 +116,16 @@ def main():
                     "若本輪確實不需測試（中途暫停、實驗性修改），請向用戶說明原因後再次結束即可放行。"
                 ),
             }, ensure_ascii=False))
-    except Exception:
-        pass  # fail-open：gate 自身故障不得阻斷 session
+    except Exception as exc:
+        # fail-open：gate 自身故障不得阻斷 session；但留一行屍檢紀錄，
+        # 否則靜默死亡無從察覺（遙測本身再包一層 try，寫入失敗照樣放行）
+        try:
+            from datetime import datetime
+            with open(Path(__file__).resolve().parent / ".gate_fail",
+                      "a", encoding="utf-8") as f:
+                f.write(f"{datetime.now().isoformat()} {exc!r}\n")
+        except Exception:
+            pass
     return 0
 
 

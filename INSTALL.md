@@ -38,12 +38,13 @@ Claude should then carry out the following steps, in order. If you're Claude rea
    |---|---|---|
    | `SessionStart` | `<repo>/.claude/hooks/inject_protocol.sh` | Injects the behavior protocol at session start |
    | `UserPromptSubmit` | `<repo>/.claude/hooks/prompt_nudge.sh` | Injects a one-line reminder on every user turn |
-   | `Stop` | `<repo>/.claude/hooks/verify_gate.py` | Blocks ending a turn where code changed but no test ran |
+   | `Stop` | `<repo>/.claude/hooks/stop_gate.sh` | Heartbeat wrapper → verify_gate.py; blocks ending a turn where code changed but no test ran |
 
    Rules for this step:
-   - Only **append** these three. Never remove, reorder, or rewrite any hook, model setting, theme, or other key the user already has.
+   - Only **append** these three. Never remove, reorder, or rewrite any hook, model setting, theme, or other key the user already has — with the single exception in the upgrade rule below.
    - If any of these three already exist (installed before), skip re-adding it — this step must be idempotent (safe to run twice).
-   - After merging, verify every pre-existing top-level key and every pre-existing hook entry is still present and unchanged. If anything is missing, abort and restore from the step-4 backup.
+   - **Upgrade exception (pre-wrapper installs):** if an existing `Stop` entry points at `verify_gate.py` directly, **replace that one entry** with the `stop_gate.sh` command instead of appending — otherwise both gates fire on every Stop (double block messages, double telemetry writes). This is the only case where an existing hook entry may be modified, and the post-merge verification below must account for it.
+   - After merging, verify every pre-existing top-level key and every pre-existing hook entry is still present and unchanged — except a `Stop` → `verify_gate.py` entry replaced under the upgrade exception, whose check is instead "the new `stop_gate.sh` entry is present and the old one is gone". If anything else is missing, abort and restore from the step-4 backup.
    - Write via a temp file + atomic rename, not a direct in-place overwrite, so a crash mid-write can't corrupt the user's settings.
 
 6. **Watch out for symlinks.** Some users manage `~/.claude/hooks`, `~/.claude/skills`, `~/.claude/agents`, or `~/.claude/CLAUDE.md` as symlinks (or Windows junctions) into a separate dotfiles/config repo. Before writing into any of these directories, check whether the target — or its parent — resolves (via realpath, not just `is_symlink`, since Windows junctions can hide from that check) to somewhere unexpected. If it does, **don't write through it silently** — tell the user what you found and ask where they'd like the files to actually land.
@@ -66,7 +67,7 @@ If you already have a `~/.claude/CLAUDE.md` with your own development philosophy
 
 To remove Fable Harness:
 
-1. Open `~/.claude/settings.json` and delete the three hook entries listed in step 5 above (`SessionStart` → `inject_protocol.sh`, `UserPromptSubmit` → `prompt_nudge.sh`, `Stop` → `verify_gate.py`). Leave everything else untouched.
+1. Open `~/.claude/settings.json` and delete the three hook entries listed in step 5 above (`SessionStart` → `inject_protocol.sh`, `UserPromptSubmit` → `prompt_nudge.sh`, `Stop` → `stop_gate.sh` — or `verify_gate.py` on installs older than the heartbeat wrapper). Leave everything else untouched.
 2. Delete `~/.claude/skills/adversarial-review/` and the three files in `~/.claude/agents/` (`skeptic.md`, `red-team.md`, `simplifier.md`).
 3. If you edited your global `CLAUDE.md` in the optional step above and want the old wording back, restore it from your own version history or notes.
 

@@ -21,6 +21,10 @@ Stop hook 驗證 gate（verify_gate.py）行為驗收——對應 Fable Protocol
   T12 stdout 為 Windows 傳統編碼（PYTHONIOENCODING=cp950）→ block JSON 仍須完整輸出
      （修復前 reason 首字「⛔」不可編碼 → UnicodeEncodeError 被 fail-open 吞掉
       → gate 靜默失效；主力機實證，失效數日無人察覺）
+  T13 gate 內部例外（payload 缺 transcript_path）→ 仍放行，但須 append 一行
+     屍檢紀錄（timestamp + repr）到 gate 同目錄 .gate_fail
+     （fail-open 零遙測＝下一次靜默死亡依然無從察覺；測試用 gate 副本跑，
+      生產 .gate_fail 不受測試噪音污染）
 
 執行命令：
   cd <repo> && python -m pytest tests/test_verify_gate.py -v
@@ -90,7 +94,16 @@ def _tool_result():
         {"type": "tool_result", "tool_use_id": "toolu_x", "content": "ok"}]}}
 
 
-def run_gate(tmp_path, entries, stop_hook_active=False, transcript_path=None):
+def _gate_copy(tmp_path):
+    """回傳 gate 的 tmp 副本路徑——會觸發 fail-open 遙測的測試必須用副本跑，
+    否則 .gate_fail 屍檢紀錄寫進生產目錄，例行測試把真實死亡淹在噪音裡。"""
+    dst = tmp_path / "verify_gate.py"
+    dst.write_text(GATE.read_text(encoding="utf-8"), encoding="utf-8")
+    return dst
+
+
+def run_gate(tmp_path, entries, stop_hook_active=False, transcript_path=None,
+             gate_path=None):
     """以生產介面（stdin JSON → stdout）呼叫 gate，回傳 (stdout, returncode)。"""
     if transcript_path is None:
         transcript_path = tmp_path / "transcript.jsonl"
@@ -101,7 +114,7 @@ def run_gate(tmp_path, entries, stop_hook_active=False, transcript_path=None):
         "session_id": "test", "hook_event_name": "Stop",
         "stop_hook_active": stop_hook_active,
         "transcript_path": str(transcript_path)})
-    proc = subprocess.run([sys.executable, str(GATE)], input=payload,
+    proc = subprocess.run([sys.executable, str(gate_path or GATE)], input=payload,
                           capture_output=True, text=True, encoding="utf-8", timeout=30)
     return proc.stdout.strip(), proc.returncode
 
@@ -163,13 +176,16 @@ def test_t5_pure_qa_allows(tmp_path):
 
 
 def test_t6_missing_or_corrupt_transcript_fails_open(tmp_path):
-    out, rc = run_gate(tmp_path, [], transcript_path=tmp_path / "nonexistent.jsonl")
+    # transcript 不存在會觸發 fail-open 遙測 → 用 gate 副本跑，別污染生產 .gate_fail
+    gate = _gate_copy(tmp_path)
+    out, rc = run_gate(tmp_path, [], transcript_path=tmp_path / "nonexistent.jsonl",
+                       gate_path=gate)
     assert rc == 0
     assert out == ""
     corrupt = tmp_path / "corrupt.jsonl"
     corrupt.write_text('{"type":"user","message":{"content":"hi"}}\nNOT-JSON-LINE\n',
                        encoding="utf-8")
-    out, rc = run_gate(tmp_path, [], transcript_path=corrupt)
+    out, rc = run_gate(tmp_path, [], transcript_path=corrupt, gate_path=gate)
     assert rc == 0
     assert out == ""
 
@@ -330,3 +346,21 @@ def test_t12_cp950_stdout_still_blocks(tmp_path):
     data = json.loads(proc.stdout.decode("utf-8").strip())
     assert data["decision"] == "block"
     assert data["reason"].startswith("⛔")
+
+
+def test_t13_internal_failure_writes_gate_fail_marker(tmp_path):
+    """T13：fail-open 吞例外前須 append 一行屍檢紀錄到 .gate_fail（零遙測的 fail-open
+    ＝下一次靜默死亡依然無從察覺）。payload 缺 transcript_path → KeyError →
+    照樣放行（rc 0、無輸出），但 gate 同目錄的 marker 須多出一行含 KeyError。
+    用 gate 副本跑：marker 落在 tmp，生產 .gate_fail 不沾測試噪音。"""
+    gate = _gate_copy(tmp_path)
+    marker = gate.parent / ".gate_fail"
+    assert not marker.exists()
+    payload = json.dumps({"session_id": "test", "hook_event_name": "Stop",
+                          "stop_hook_active": False})
+    proc = subprocess.run([sys.executable, str(gate)], input=payload,
+                          capture_output=True, text=True, encoding="utf-8", timeout=30)
+    assert proc.returncode == 0
+    assert proc.stdout.strip() == ""
+    new_lines = marker.read_text(encoding="utf-8").strip().splitlines()
+    assert len(new_lines) == 1 and "KeyError" in new_lines[0]

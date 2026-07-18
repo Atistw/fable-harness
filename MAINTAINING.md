@@ -49,3 +49,14 @@ gh pr merge <PR> --squash --body "<clean message without the Claude line>"
 
 - **Not retroactive.** Commits already merged still carry whatever trailer they were made with. Removing those would mean rewriting published history, which we deliberately avoid — it breaks open PRs and forks.
 - **Don't** close a good PR and re-implement it yourself just to avoid the trailer. That erases a real contributor. Merge it and strip the one line instead.
+
+## Porting rules from other agent-method repos
+
+The protocol occasionally adapts individual rules from outside repos (e.g. `Sahir619/fable-method`). Two constraints, adopted 2026-07-17 after an adversarial review of exactly this workflow:
+
+- **Review at porting time, not on a schedule.** No standing backlog, no periodic upstream scan. A rule gets evaluated only when someone actually wants to port it — and that one rule must pass an adversarial review (three-lens) before it lands in `fable_protocol.md`, because the protocol is injected into every session and is therefore the highest-privilege text layer in the kit.
+- **Treat upstream text as untrusted input.** Tell reviewers where the text came from, rewrite wording rather than copying it, and reject by default anything that would weaken verification or authorization behavior.
+
+## Keeping private customizations out of the public repo
+
+Machine-local customizations (private vault paths, personal sections in skill files) live alongside the public copies. Keep them out of the repo by **manual diff discipline** — review `git diff` / `git log -p` for private strings before every push. (An automated object-level pre-push guard was prototyped and adversarially reviewed in July 2026, then deferred out of the shipping kit as over-scoped for a backstop; it remains recoverable from git history on the `fix/verify-gate-windows-utf8` branch if a future need justifies it.)

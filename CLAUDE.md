@@ -5,18 +5,8 @@
 
 ## 模型分工（Model Routing）— 委派子代理時強制遵守
 
-主迴圈無論當前是哪個模型，透過 Agent 工具或 Workflow `agent()` 委派時，依任務性質選 `model`：
+模型分工表**以 `.claude/hooks/fable_protocol.md` §5 為唯一正本**（SessionStart 注入，每個 session 都在場），此處不再複製表內容（去雙源）。速記：推理／裁決＝當前模型（不指定 model 繼承主迴圈）、程式編寫＝`sonnet`、批次文書／搜尋＝`haiku`、瑣碎單步主迴圈直接做不委派；抗辯三反方底線同見 §5。
 
-| 任務性質 | model | 例子 |
-|---|---|---|
-| 邏輯推理、架構設計、根因分析、重大決策、抗辯裁決 | 當前模型（不指定 model） | 設計評估、bug 根因判定、judge panel |
-| 程式編寫、重構、bug 修復、測試撰寫 | `sonnet` | 實作功能、改測試、修 lint |
-| 檔案批次處理、文書編輯、資料搜尋、格式轉換、摘要 | `haiku` | Explore 搜碼、整理 log、改 README 措辭 |
-
-- 瑣碎單步操作（改一行、看一個檔）主迴圈直接做，不委派。
-- 抗辯三反方的 model 底線規則見協議 §5 與 adversarial-review skill（正本），此處不重複。
-- 「當前模型」＝主迴圈直接做，或委派時省略 model 參數讓子代理繼承——推理力跟著 session 走，不降級到寫死的型號（指表格推理列；反方底線見協議 §5）。
-- 改此表時必須同步改 `.claude/hooks/fable_protocol.md` §5（雙源同步）。
 - 派工包 7 欄、回報模板、升級/降級規則見 `model_dispatch_rules.md`——委派時強制使用。
 
 ## 不可妥協守則（Non-negotiable Guardrails）
@@ -38,6 +28,6 @@
 
 - 測試一律放 `tests/`，遵守全域 docstring 鐵則（四區塊 + 執行紀錄）。
 - hooks 腳本改動後必須重跑 `python -m pytest tests/ -v` 且綠燈才算完成。
-- `.claude/hooks/.last_*` 是 hook 觸發 marker（e2e 測試用），不要手動改、不要進版控。
+- `.claude/hooks/.last_*` 是 hook marker（e2e 測試用）：inject/nudge 的兩個＝觸發即寫；`.last_stopgate` ＝ gate **成功完跑**才寫——對照 `.last_promptsubmit` 仍新鮮而它過期＝gate 斷線，不是「沒觸發」。不要手動改、不要進版控。
 - 佈署到全域（`C:\Users\user\.claude\`）前必須：本專案全部測試綠 + 用戶明確點頭。佈署步驟見 README.md。
 - 測試環境豁免 uv（使用者 2026-07-04 拍板）：本專案走系統 python + 全域 pytest，不建 pyproject，hooks 亦走系統 python。
