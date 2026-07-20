@@ -5,15 +5,17 @@ Stop hook 驗證 gate（FABLE-PROTOCOL 組件3，soft 模式）。
 行為：解析 transcript，若「最後一個真實 user prompt 之後」有 Edit/Write/NotebookEdit
 修改程式碼檔，卻沒有任何測試執行命令，輸出 {"decision":"block","reason":...} 擋回一次；
 stop_hook_active=true（模型第二次結束）時放行，避免純討論 session 被無限卡死。
-任何解析錯誤一律 fail-open（exit 0 無輸出）——gate 絕不可弄壞 session。
+任何解析錯誤一律 fail-open（exit 0 無輸出）——gate 絕不可弄壞 session；但 fail-open 前
+會 best-effort 留一行屍檢到同目錄 .gate_fail（gitignored），否則靜默死亡數日無人察覺。
 
 介面：stdin 收 hook JSON（transcript_path / stop_hook_active），stdout 輸出 block JSON 或無輸出。
-測試：tests/test_verify_gate.py（十一案例，fail-then-pass 已驗證；T9 多生態識別、T10 假放行防護、T11 --test 自測入口）。
+測試：tests/test_verify_gate.py（十二案例，fail-then-pass 已驗證；T9 多生態識別、T10 假放行防護、
+T11 --test 自測入口、T12 fail-open 屍檢遙測且 sanitize 不倒 payload）。
 """
 import json
 import re
 import sys
-from pathlib import PurePath
+from pathlib import Path, PurePath
 
 CODE_EXTS = {
     ".py", ".js", ".ts", ".tsx", ".jsx", ".mjs", ".cjs",
@@ -84,6 +86,28 @@ def analyze(entries):
     return edited, test_seen
 
 
+def _record_failure(exc):
+    """fail-open 前 best-effort 留一行屍檢到同目錄 .gate_fail：沒有遙測的靜默 fail-open
+    會數日無人察覺（cp950 事故即此模式——print 拋錯被 except 吞掉、gate 靜默不 block）。
+    只記「例外類別 + 截斷訊息」（非 exc!r/整包 payload，降低未來例外把路徑/內容寫入的風險）；
+    容量上限保留最早的事故行（首次靜默死亡最有價值），滿了即停寫、不淘汰不覆寫；
+    整段包在自己的 try 內——遙測本身故障絕不可破壞 fail-open。"""
+    try:
+        from datetime import datetime, timezone
+        marker = Path(__file__).resolve().parent / ".gate_fail"
+        max_lines = 500
+        if marker.exists():
+            with open(marker, encoding="utf-8", errors="replace") as f:
+                if sum(1 for _ in f) >= max_lines:
+                    return  # 上限：保留最早事故行，不 truncate、不 evict-oldest
+        ts = datetime.now(timezone.utc).isoformat()
+        msg = str(exc)[:200].replace("\n", " ").replace("\r", " ")
+        with open(marker, "a", encoding="utf-8") as f:
+            f.write(f"{ts} {type(exc).__name__}: {msg}\n")
+    except Exception:
+        pass  # 遙測自身故障照樣 fail-open
+
+
 def main():
     try:
         # Claude Code reads hook stdout as UTF-8; on legacy-codepage Windows
@@ -114,8 +138,8 @@ def main():
                     "若本輪確實不需測試（中途暫停、實驗性修改），請向用戶說明原因後再次結束即可放行。"
                 ),
             }, ensure_ascii=False))
-    except Exception:
-        pass  # fail-open：gate 自身故障不得阻斷 session
+    except Exception as exc:
+        _record_failure(exc)  # fail-open：gate 自身故障不得阻斷 session，但留屍檢可見
     return 0
 
 

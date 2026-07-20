@@ -1,6 +1,9 @@
 # hook 觸發 marker（e2e 測試用，專案守則：不進版控）
 .claude/hooks/.last_*
 
+# gate fail-open 屍檢遙測（含本機例外訊息，不進版控）
+.claude/hooks/.gate_fail
+
 # Python
 __pycache__/
 *.pyc
