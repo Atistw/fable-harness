@@ -54,6 +54,12 @@ Fable Harness 是一個小型套件——幾個 hooks、一個 skill、幾個子
 
 目前版本記在 [VERSION](VERSION)；重要變更記於 [CHANGELOG.md](CHANGELOG.md)。
 
+## 關於這個 Fork
+
+本 repo fork 自 [Miguok/fable-harness](https://github.com/Miguok/fable-harness)，維護者保留原作者的授權與 commit 歸屬。
+
+對上游的實質貢獻：PR [#3](https://github.com/Miguok/fable-harness/pull/3)（`verify_gate` fail-open 靜默失敗修正）雖未直接合併，但原作者採納了其中的做法並重寫進上游 commit [`b6f794e`](https://github.com/Miguok/fable-harness/commit/b6f794e)，標註 `Co-authored-by: Atis <atis.tw@gmail.com>`，已收錄於上游 v1.0.2（`.gate_fail` fail-open telemetry）。
+
 ## 授權
 
 MIT — 詳見 [LICENSE](LICENSE)（翻譯版：[繁體中文](LICENSE.zh-TW)）。

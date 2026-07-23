@@ -54,6 +54,12 @@ Fable Harness는 작은 키트——몇 개의 hook, 하나의 skill, 몇 개의
 
 현재 버전은 [VERSION](VERSION)에 기록하고, 주요 변경 사항은 [CHANGELOG.md](CHANGELOG.md)에 기록합니다.
 
+## 이 Fork에 대하여
+
+본 repo는 [Miguok/fable-harness](https://github.com/Miguok/fable-harness)의 fork이며, 원저자의 저작권 표시와 커밋 이력을 보존합니다.
+
+업스트림에 대한 실질적 기여: PR [#3](https://github.com/Miguok/fable-harness/pull/3)(`verify_gate`의 fail-open 무음 실패 수정)은 직접 머지되지 않았지만, 메인테이너가 그 접근을 채택하여 업스트림 커밋 [`b6f794e`](https://github.com/Miguok/fable-harness/commit/b6f794e)로 다시 작성했고, `Co-authored-by: Atis <atis.tw@gmail.com>`로 크레딧되었습니다. 업스트림 v1.0.2(`.gate_fail` fail-open telemetry)에 반영되었습니다.
+
 ## 라이선스
 
 MIT — [LICENSE](LICENSE) 참고(번역본: [繁體中文](LICENSE.zh-TW)).

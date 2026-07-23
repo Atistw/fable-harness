@@ -54,6 +54,12 @@ This kit follows [Semantic Versioning](https://semver.org/) — `MAJOR.MINOR.PAT
 
 The current version lives in [VERSION](VERSION); notable changes are recorded in [CHANGELOG.md](CHANGELOG.md).
 
+## About this fork
+
+This repo is forked from [Miguok/fable-harness](https://github.com/Miguok/fable-harness); attribution and commit history from the original author are preserved.
+
+Substantive upstream contribution: PR [#3](https://github.com/Miguok/fable-harness/pull/3) (fix for `verify_gate` silently swallowing fail-open failures) wasn't merged directly, but the maintainer adopted the approach and rewrote it into upstream commit [`b6f794e`](https://github.com/Miguok/fable-harness/commit/b6f794e), crediting `Co-authored-by: Atis <atis.tw@gmail.com>`. It shipped in upstream v1.0.2 (`.gate_fail` fail-open telemetry).
+
 ## License
 
 MIT — see [LICENSE](LICENSE) (translation: [繁體中文](LICENSE.zh-TW)).
