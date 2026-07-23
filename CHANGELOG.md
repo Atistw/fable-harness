@@ -16,17 +16,19 @@ The current version is also kept in [VERSION](VERSION).
 
 - **Protocol §1 — hard bounds (防空轉)**: the OODA loop now carries explicit retry ceilings — 3 consecutive failures of the same verification → stop and hand back to the user with the evidence and failure log collected so far (no unbounded rewrite-and-retry); 2 consecutive fruitless searches for the same information → stop searching and state what is missing and where it could be found. Hitting a ceiling and handing back is framed as correct behavior; concealed spinning is the failure. (Concept adapted from [Sahir619/fable-method](https://github.com/Sahir619/fable-method)'s hard bounds.)
 - **Protocol §4 — non-code evidence sets**: Definition of Done now covers non-coding work with per-task-type evidence standards — research/fact-checking (named facts carry source links; primary sources preferred, secondary flagged), reports/summaries (every conclusion traceable to source material; unsupported inference labeled 推測), diagnosis/strategy calls (major conclusions must pass §2 adversarial review or be labeled 未抗辯假設), and batch data processing (before/after counts reconciled + sampled content checks; "all done" claims require count evidence).
-- **`stop_gate.sh` heartbeat wrapper**: the Stop hook now goes through a shell wrapper that invokes Python (`py -3` version-independent launcher, `python3` fallback) and writes a `.last_stopgate` marker **after the gate returns successfully** — interpreter-level death (launcher gone, Python upgraded away) shows up as a stale marker against a fresh `.last_promptsubmit`.
-- **`.gate_fail` post-mortem marker**: verify_gate's fail-open handler appends one line (timestamp + exception repr) to a gitignored `.gate_fail` file before swallowing, in a nested try so telemetry itself can't break fail-open. Test T13 (marker write) covers it; internal-failure tests run against a tmp copy of the gate so routine test runs never pollute the production marker. Suite is now 13 gate cases.
+- **verify_gate**: `TEST_CMD_RE` now recognizes custom shell test/check runners (e.g. `vault-check.sh`, `foo_test.sh`, `test-all.sh`), which sit in `CODE_EXTS` but had no matching test-command branch — editing one and then running it to verify was wrongly blocked. A bounded regex branch fixes it; look-alikes (`latest.sh`, `testing.sh`) stay blocked. Adds test T14 (fail-then-pass verified).
 - **Maintainer guide** (`MAINTAINING.md`, + 繁體中文 translation): the PR merge SOP for keeping the contributor list clean — squash-merge and drop the `Co-Authored-By: Claude <noreply@…>` trailer so no phantom contributor appears.
 
 ### Changed
 
 - **Docs**: the README "How it works" section (all five languages) now documents the token efficiency that falls out of the architecture — tiered model routing plus context-isolated, parallel sub-agents — noting that no Fable-specific benchmark figure is claimed.
 
+## [1.0.2] — 2026-07-20
+
 ### Fixed
 
-- **verify_gate**: force UTF-8 stdout (`sys.stdout.reconfigure`) so the block JSON — whose reason string opens with "⛔" — survives Windows consoles that default to a legacy codepage (e.g. cp950). Without it the print raised `UnicodeEncodeError`, the fail-open wrapper swallowed it, and the Stop gate silently never blocked. Adds regression test T12 (fail-then-pass verified: cp950 stdout goes from empty output to a correct block JSON).
+- **verify_gate**: force UTF-8 stdout (`sys.stdout.reconfigure`) so the block JSON — whose reason string opens with "⛔" — survives Windows consoles that default to a legacy codepage (e.g. cp950). Without it `print()` raised `UnicodeEncodeError`, the fail-open handler swallowed it, and the Stop gate silently never blocked. Landed via [#2](https://github.com/Miguok/fable-harness/pull/2) by [@lepus071](https://github.com/lepus071).
+- **verify_gate**: the fail-open handler no longer swallows failures silently — before returning it appends one sanitized post-mortem line (exception class + bounded message, never the raw payload) to a gitignored `.gate_fail`, in a nested try so the telemetry can never break fail-open, and bounded to keep the earliest incident lines. A silently-dying gate is now observable — that exact failure mode is what hid the cp950 bug for days. Adds test T12 (fail-then-pass verified). Idea from [@Atistw](https://github.com/Atistw) in [#3](https://github.com/Miguok/fable-harness/pull/3).
 
 ## [1.0.1] — 2026-07-07
 

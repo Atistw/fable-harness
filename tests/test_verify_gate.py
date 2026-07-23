@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
+r"""
 Stop hook 驗證 gate（verify_gate.py）行為驗收——對應 Fable Protocol Kit「組件3：機械強制驗證」。
 
 驗收項目清單：
@@ -21,10 +21,10 @@ Stop hook 驗證 gate（verify_gate.py）行為驗收——對應 Fable Protocol
   T12 stdout 為 Windows 傳統編碼（PYTHONIOENCODING=cp950）→ block JSON 仍須完整輸出
      （修復前 reason 首字「⛔」不可編碼 → UnicodeEncodeError 被 fail-open 吞掉
       → gate 靜默失效；主力機實證，失效數日無人察覺）
-  T13 gate 內部例外（payload 缺 transcript_path）→ 仍放行，但須 append 一行
-     屍檢紀錄（timestamp + repr）到 gate 同目錄 .gate_fail
-     （fail-open 零遙測＝下一次靜默死亡依然無從察覺；測試用 gate 副本跑，
-      生產 .gate_fail 不受測試噪音污染）
+  T13 gate 內部例外（payload 缺 transcript_path → KeyError）→ 仍 fail-open（rc0、無輸出），
+     但同目錄 .gate_fail 須多一行含例外類別，且不得含整包 payload（sanitize）
+     （2026-07-20 Fable 三鏡頭抗辯採納：except: pass 靜默吞失敗＝cp950 事故潛伏根因，
+      修法＝best-effort 屍檢遙測；用 gate 副本跑，生產 .gate_fail 不受測試噪音污染）
   T14 自訂 shell 測試/檢查 runner（vault-check.sh / foo_test.sh / test-all.sh）→
      識別放行；形似日常 .sh（latest.sh / testing.sh）→ 仍須 block
      （2026-07-21 實證：.sh runner 在 CODE_EXTS 卻無測試分支，改 .sh 跑它驗證被誤攔）
@@ -53,6 +53,19 @@ fail-then-pass guard：
   被誤攔（allow cases 遭 block）→ regex 加 `\s--test(\s|$)` 錨定後全綠 ✅；
   3 個形似旗標負例（--test-pypi/--testing/--tests）維持 block，T9/T10 保持綠
 最後執行：2026-07-05 22:51 → 11 passed ✅（全套 19 passed in 0.65s）
+  2026-07-08 00:08 pre-deploy check on zh-TW Windows (stdout = cp950) → 4 failed:
+  every block case (T1/T8/T10/T11) got empty output — print() of "⛔"/CJK raises
+  UnicodeEncodeError on cp950 stdout and the fail-open except swallows it, so the
+  gate silently never blocks → added sys.stdout.reconfigure(encoding="utf-8") in
+  verify_gate.py main() (Claude Code reads hook stdout as UTF-8 on all platforms)
+最後執行：2026-07-08 00:09 → 11 passed ✅（全套 19 passed in 1.39s）
+  2026-07-20 23:15 T12 對現況 verify_gate.py（except Exception: pass）執行 → 1 failed：
+  .gate_fail 從未寫入 → marker.read_text 拋 FileNotFoundError（證明測試能抓到「靜默吞
+  失敗、零遙測」缺陷）；T6 同時綠。→ 將 except: pass 改為 _record_failure(exc)
+  （best-effort append 例外類別+截斷訊息到 .gate_fail、巢狀 try、容量上限保留最早事故行）
+  後 T12 綠。fail-open 契約不變（rc0、stdout 空）；sanitize 斷言：.gate_fail 不含整包
+  payload（sentinel session_id 未出現）。
+最後執行：2026-07-20 23:15 → 12 passed ✅（gate 全綠；全套 tests/ 66 passed in 2.78s）
 
 [關鍵量測值]
   T1 block 輸出: {"decision": "block", "reason": "⛔ FABLE-PROTOCOL 驗證 gate：本輪修改了程式碼（app.py）..."}
@@ -69,7 +82,15 @@ fail-then-pass guard：
   T6 → 路徑不存在 + 壞 JSON 行皆 fail-open
   T7 → 輪次邊界（最後真實 user prompt）判定正確
   T8 → <command-name>/<local-command-*> 前綴條目不算輪次邊界
+  T12 → 內部例外走 fail-open 屍檢：.gate_fail 恰 1 行含 KeyError、rc0、stdout 空、
+     且不含 payload sentinel（sanitize）；用 gate 副本跑不污染生產 .gate_fail
 ⏳ 待驗收（本檔未涵蓋）
+  .gate_fail 容量上限（500 行）滿後保留最早事故行的行為 → 本檔未以 500+ 行實測驗證，
+     僅靜態邏輯保證（滿即 return，不 truncate/evict）；解鎖條件＝需要時補一個寫滿上限的案例
+  未來新例外類型的訊息是否含敏感值 → 現以「類別+str(exc) 截斷 200」為 sanitize 邊界，
+     非逐型別白名單；已知殘餘：某些例外 str 可能含路徑（如 FileNotFoundError），但 .gate_fail
+     gitignored、本機、永不回讀進任何輸出，風險低；解鎖條件＝若未來有例外把 payload 塞進 str，
+     改為僅記類別名或加型別白名單
   真實 Stop 事件端到端觸發：需在互動 session 中讓模型改碼後結束才能觀察，
   無法以 claude -p 穩定重現（-p 模式模型行為不可控）；解鎖條件＝佈署後
   以真實互動 session 手動演練一次（改一行 .py 不跑測試即結束，應見擋回訊息）。
@@ -98,8 +119,8 @@ def _tool_result():
 
 
 def _gate_copy(tmp_path):
-    """回傳 gate 的 tmp 副本路徑——會觸發 fail-open 遙測的測試必須用副本跑，
-    否則 .gate_fail 屍檢紀錄寫進生產目錄，例行測試把真實死亡淹在噪音裡。"""
+    """回傳 gate 的 tmp 副本路徑——會觸發 fail-open 遙測的測試須用副本跑，
+    否則 .gate_fail 屍檢寫進生產 hooks 目錄，例行測試把真實死亡淹沒在噪音裡。"""
     dst = tmp_path / "verify_gate.py"
     dst.write_text(GATE.read_text(encoding="utf-8"), encoding="utf-8")
     return dst
@@ -179,7 +200,7 @@ def test_t5_pure_qa_allows(tmp_path):
 
 
 def test_t6_missing_or_corrupt_transcript_fails_open(tmp_path):
-    # transcript 不存在會觸發 fail-open 遙測 → 用 gate 副本跑，別污染生產 .gate_fail
+    # 不存在的 transcript 會觸發 fail-open 遙測 → 用 gate 副本跑，避免污染生產 .gate_fail
     gate = _gate_copy(tmp_path)
     out, rc = run_gate(tmp_path, [], transcript_path=tmp_path / "nonexistent.jsonl",
                        gate_path=gate)
@@ -351,22 +372,27 @@ def test_t12_cp950_stdout_still_blocks(tmp_path):
     assert data["reason"].startswith("⛔")
 
 
-def test_t13_internal_failure_writes_gate_fail_marker(tmp_path):
-    """T13：fail-open 吞例外前須 append 一行屍檢紀錄到 .gate_fail（零遙測的 fail-open
-    ＝下一次靜默死亡依然無從察覺）。payload 缺 transcript_path → KeyError →
-    照樣放行（rc 0、無輸出），但 gate 同目錄的 marker 須多出一行含 KeyError。
-    用 gate 副本跑：marker 落在 tmp，生產 .gate_fail 不沾測試噪音。"""
+def test_t13_internal_failure_writes_sanitized_gate_fail(tmp_path):
+    """T13：gate 內部例外時，fail-open 前須留一行屍檢到同目錄 .gate_fail——零遙測的
+    靜默 fail-open 會數日無人察覺（cp950 事故即此模式：print 拋錯被 except: pass 吞掉、
+    gate 靜默不 block）。payload 缺 transcript_path → KeyError → 仍放行（rc0、無輸出），
+    但 .gate_fail 須多一行且標明例外類別；且不得含完整 payload（sanitize：只記類別 +
+    截斷訊息，非 exc!r/整包 payload）。用 gate 副本跑：marker 落在 tmp，生產 .gate_fail
+    不受測試噪音污染。"""
     gate = _gate_copy(tmp_path)
     marker = gate.parent / ".gate_fail"
     assert not marker.exists()
-    payload = json.dumps({"session_id": "test", "hook_event_name": "Stop",
-                          "stop_hook_active": False})
+    sentinel = "SENTINEL_SECRET_9f3a2b"
+    payload = json.dumps({"session_id": sentinel, "hook_event_name": "Stop",
+                          "stop_hook_active": False})  # 故意缺 transcript_path → KeyError
     proc = subprocess.run([sys.executable, str(gate)], input=payload,
                           capture_output=True, text=True, encoding="utf-8", timeout=30)
-    assert proc.returncode == 0
-    assert proc.stdout.strip() == ""
-    new_lines = marker.read_text(encoding="utf-8").strip().splitlines()
-    assert len(new_lines) == 1 and "KeyError" in new_lines[0]
+    assert proc.returncode == 0                          # fail-open 不變
+    assert proc.stdout.strip() == ""                     # 內部失敗不輸出 block JSON
+    body = marker.read_text(encoding="utf-8")
+    lines = body.strip().splitlines()
+    assert len(lines) == 1 and "KeyError" in lines[0]    # 屍檢寫入且標明例外類別
+    assert sentinel not in body                          # sanitize：不倒整包 payload
 
 
 def test_t14_shell_test_runner_allow(tmp_path):
