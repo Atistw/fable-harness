@@ -34,6 +34,10 @@ TEST_CMD_RE = re.compile(
     r"|mvnw?(\.cmd)?\s+(\S+\s+)*test(\s|$)|gradlew?(\.bat)?\s+(\S+\s+)*test(\s|$)|dotnet\s+test(\s|$)"
     r"|\brspec\b|\bphpunit\b|\bctest\b|make\s+test\b|rake\s+(\S+\s+)*test\b|mix\s+test\b"
     r"|(^|[;&|]\s*)(tox|nox)\b|deno\s+test|rails\s+test"
+    # shell 測試/檢查 runner（2026-07-21 T14：vault-check.sh 這類自訂 .sh runner
+    # 本在 CODE_EXTS 卻無對應測試分支，改 .sh 後跑它驗證仍被誤攔實證）；前導邊界
+    # (?:^|[\s;&|/\\]) + 尾 \b，並用 test([-_]…)? 防 latest.sh/testing.sh 假放行
+    r"|(?:^|[\s;&|/\\])(test([-_][\w-]*)?|[\w-]*_test|[\w-]*check)\.sh\b"
     # 腳本自帶 --test 自測入口（2026-07-05 T11：zh_convert_safe.py --test 真實
     # session 連續誤攔實證）；(\s|$) 錨定使 --tests/--testing/--test-pypi 不假放行
     r"|\s--test(\s|$))",

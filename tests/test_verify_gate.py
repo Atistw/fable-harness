@@ -25,6 +25,9 @@ Stop hook 驗證 gate（verify_gate.py）行為驗收——對應 Fable Protocol
      屍檢紀錄（timestamp + repr）到 gate 同目錄 .gate_fail
      （fail-open 零遙測＝下一次靜默死亡依然無從察覺；測試用 gate 副本跑，
       生產 .gate_fail 不受測試噪音污染）
+  T14 自訂 shell 測試/檢查 runner（vault-check.sh / foo_test.sh / test-all.sh）→
+     識別放行；形似日常 .sh（latest.sh / testing.sh）→ 仍須 block
+     （2026-07-21 實證：.sh runner 在 CODE_EXTS 卻無測試分支，改 .sh 跑它驗證被誤攔）
 
 執行命令：
   cd <repo> && python -m pytest tests/test_verify_gate.py -v
@@ -364,3 +367,50 @@ def test_t13_internal_failure_writes_gate_fail_marker(tmp_path):
     assert proc.stdout.strip() == ""
     new_lines = marker.read_text(encoding="utf-8").strip().splitlines()
     assert len(new_lines) == 1 and "KeyError" in new_lines[0]
+
+
+def test_t14_shell_test_runner_allow(tmp_path):
+    """T14：自訂 shell 測試/檢查 runner（vault-check.sh、foo_test.sh、test-all.sh）
+    改了 code 後執行須被識別為測試 → 放行（2026-07-21 實證：.sh runner 本在
+    CODE_EXTS 卻無對應測試分支，改 .sh 後跑它驗證仍被誤攔）；形似的日常 .sh
+    （latest.sh／testing.sh）不得因此假放行。"""
+    allow_cases = [
+        ("D:\\proj\\vault-check.sh", "bash vault-check.sh"),
+        ("D:\\proj\\lib.py", "./run_test.sh"),
+        ("D:\\proj\\lib.py", "sh scripts/test-all.sh"),
+        ("D:\\proj\\lib.py", "./foo_check.sh && git add -u"),
+    ]
+    block_cases = [
+        "./latest.sh",
+        "bash testing.sh",
+    ]
+    failures = []
+    for path, cmd in allow_cases:
+        entries = [
+            _user("幫我修 bug"),
+            _tool_use("Edit", {"file_path": path, "old_string": "a", "new_string": "b"}),
+            _tool_result(),
+            _tool_use("Bash", {"command": cmd}),
+            _tool_result(),
+        ]
+        out, rc = run_gate(tmp_path, entries)
+        if rc != 0 or out != "":
+            failures.append(("應放行未放行", cmd, out[:60]))
+    for cmd in block_cases:
+        entries = [
+            _user("幫我修 bug"),
+            _tool_use("Edit", {"file_path": "D:\\proj\\app.py", "old_string": "a", "new_string": "b"}),
+            _tool_result(),
+            _tool_use("Bash", {"command": cmd}),
+            _tool_result(),
+        ]
+        out, rc = run_gate(tmp_path, entries)
+        blocked = False
+        if out:
+            try:
+                blocked = json.loads(out).get("decision") == "block"
+            except json.JSONDecodeError:
+                blocked = False
+        if not blocked:
+            failures.append(("應攔未攔", cmd, out[:60]))
+    assert not failures, f"T14 失敗: {failures}"
